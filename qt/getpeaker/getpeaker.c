@@ -2,6 +2,33 @@
 #include "getpeaker.h"
 #include "limits.h"
 
+enum {COEF_10dB = 10}; // = 10^1
+
+static int16_t calcTreshold(int16_t * RD, int16_t r_size, int16_t d_size){
+    int64_t sum = 0;
+    for(int16_t r = 0; r < r_size; ++r){
+        for(int16_t d = 0; d < d_size; ++d){
+            sum += RD[r*d_size + d];
+        }
+    }
+    int16_t average = sum/r_size/d_size;
+    int16_t treshold = average * COEF_10dB;
+    return treshold;
+}
+
+static int16_t calcTreshold2(int16_t * RD, int16_t r_size, int16_t d_size){
+    int64_t sum = 0;
+    for(int16_t r = 0; r < r_size/2; ++r){
+        for(int16_t d = 0; d < d_size; ++d){
+            sum += RD[r*d_size + d] + RD[r*d_size + d + r_size/2];
+        }
+    }
+    int16_t average = sum/r_size/d_size;
+    int16_t treshold = average * COEF_10dB;
+    return treshold;
+}
+
+#if 0
 int16_t getPeak(int16_t * RD, int16_t r_size, int16_t d_size, uint32_t * outIndexRD){
     int16_t numPeaks = 0;
     // Включить кэш
@@ -16,33 +43,7 @@ int16_t getPeak(int16_t * RD, int16_t r_size, int16_t d_size, uint32_t * outInde
     // + распоралелить по ядрам
     return numPeaks;
 }
-
-int16_t getPeak1(int16_t * RD, int16_t r_size, int16_t d_size, uint32_t * outIndexRD){
-    int16_t numPeaks = 0;
-    for(int16_t r = 0; r < r_size; ++r){
-        for(int16_t d = 0; d < d_size; ++d){
-            int16_t val11 = (r > 0)&&(d > 0) ? RD[(r - 1) * r_size + (d - 1)] : SHRT_MIN;
-            int16_t val12 = (r > 0) ? RD[(r - 1) * r_size + d] : SHRT_MIN;
-            int16_t val13 = (r > 0)&&(d < d_size - 1) ? RD[(r - 1) * r_size + (d + 1)] : SHRT_MIN;
-
-            int16_t val21 = (d > 0) ? RD[r * r_size + (d - 1)] : SHRT_MIN;
-            int16_t val22 = RD[r * r_size + d];
-            int16_t val23 = (d < d_size - 1) ? RD[r * r_size + (d + 1)] : SHRT_MIN;
-
-            int16_t val31 = (r < r_size - 1)&&(d > 0) ? RD[(r + 1) * r_size + (d - 1)] : SHRT_MIN;
-            int16_t val32 = (r < r_size - 1) ? RD[(r + 1) * r_size + d] : SHRT_MIN;
-            int16_t val33 = (r < r_size - 1)&&(d < d_size - 1) ? RD[(r + 1) * r_size + (d + 1)] : SHRT_MIN;
-            if((val22 > val11) && (val22 > val12) && (val22 > val13) &&
-                    (val22 > val21) && (val22 > val23) &&
-                    (val22 > val31) &&(val22 > val32) &&(val22 > val33)){
-                outIndexRD[numPeaks] = r << 16 | d;
-                ++numPeaks;
-            }
-        }
-    }
-
-    return numPeaks;
-}
+#endif
 
 static const int16_t offsetIndexes[8][2] = {
     {-1, -1}, {-1, 0}, {-1, 1},
@@ -52,18 +53,18 @@ static const int16_t offsetIndexes[8][2] = {
 
 int16_t getPeak3(int16_t * RD, int16_t r_size, int16_t d_size, uint32_t * outIndexRD){
     int16_t numPeaks = 0;
-    for(int16_t r = 0; r < r_size; ++r){
-        for(int16_t d = 0; d < d_size; ++d){
-            int16_t val22 = RD[r * r_size + d];
+    for(int16_t d = 0; d < d_size; ++d){
+        for(int16_t r = 0; r < r_size; ++r){
+            int16_t val22 = RD[d * r_size + r];
             int16_t topCnt = 0;
             for(int16_t i = 0; i < 8; ++i){
-               int16_t r_sh = r + offsetIndexes[i][0];
-               int16_t d_sh = d + offsetIndexes[i][1];
+               int16_t d_sh = d + offsetIndexes[i][0];
+               int16_t r_sh = r + offsetIndexes[i][1];
                int16_t val = 0;
                if ((r_sh < 0)||(d_sh < 0)||(r_sh >= r_size)||(d_sh >= d_size)){
                    val = SHRT_MIN;
                }else{
-                   val = RD[r_sh * r_size + d_sh];
+                   val = RD[d_sh * r_size + r_sh];
                }
                if (val22 > val){
                    ++topCnt;
@@ -82,24 +83,30 @@ int16_t getPeak3(int16_t * RD, int16_t r_size, int16_t d_size, uint32_t * outInd
 }
 
 int16_t getPeak4(int16_t * RD, int16_t r_size, int16_t d_size, uint32_t * outIndexRD){
+    int16_t treshold = calcTreshold(RD, r_size, d_size);
+    int16_t treshold2 = calcTreshold2(RD, r_size, d_size);
+    treshold+=treshold2;
+
     int16_t numPeaks = 0;
-    for(int16_t r = 1; r < r_size-1; ++r){
-        for(int16_t d = 1; d < d_size-1; ++d){
-            int16_t val22 = RD[r * r_size + d];
+    for(int16_t d = 1; d < d_size-1; ++d){
+        for(int16_t r = 1; r < r_size-1; ++r){
+            int16_t val = RD[d * r_size + r];
             int16_t topCnt = 0;
-            for(int16_t i = 0; i < 8; ++i){
-                int16_t r_sh = r + offsetIndexes[i][0];
-                int16_t d_sh = d + offsetIndexes[i][1];
-                int16_t val = RD[r_sh * r_size + d_sh];
-               if (val22 > val){
-                   ++topCnt;
-               }else{
-                   break;
-               }
-            }
-            if (topCnt == 8){
-                outIndexRD[numPeaks] = r << 16 | d;
-                ++numPeaks;
+            if (val > treshold){
+                for(int16_t i = 0; i < 8; ++i){
+                    int16_t d_sh = d + offsetIndexes[i][0];
+                    int16_t r_sh = r + offsetIndexes[i][1];
+                    int16_t valAdjacent = RD[d_sh * r_size + r_sh];
+                   if (val > valAdjacent){
+                       ++topCnt;
+                   }else{
+                       break;
+                   }
+                }
+                if (topCnt == 8){
+                    outIndexRD[numPeaks] = r << 16 | d;
+                    ++numPeaks;
+                }
             }
         }
     }
