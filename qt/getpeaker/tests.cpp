@@ -35,6 +35,8 @@ void _final_result(){
 #define UNIT_RESULT() _result(__FUNCTION__)
 #define UNIT_FINAL_RESULT() _final_result();
 
+#define FIELD(val, shift, mask) ((val >> shift)& mask)
+
 static const int16_t testData[] = {
 #include "test.data"
 };
@@ -44,7 +46,8 @@ enum{
     d_size = 256
 };
 
-static uint32_t outIndexRD[2500];
+static uint32_t outIndexRD[1024];
+static uint64_t outIndexRDX[1024];
 
 void test_1(){
     UNIT_INIT();
@@ -126,8 +129,8 @@ void test_3(){
 
 void test_treshold(){
     UNIT_INIT();
-    uint16_t treshold_C6000 = calcTreshold_C6000((int16_t*)testData, r_size, d_size);
-    uint16_t treshold = calcTreshold((int16_t*)testData, r_size, d_size);
+    uint16_t treshold_C6000 = calcTreshold_C6000((int16_t*)testData, r_size*d_size);
+    uint16_t treshold = calcTreshold((int16_t*)testData, r_size*d_size);
     qDebug() << "treshold_C6000: " << treshold_C6000;
     qDebug() << "treshold: " << treshold;
     UNIT_ASSERT(treshold_C6000 == treshold);
@@ -157,6 +160,45 @@ void test_RealData_A(){
     UNIT_RESULT();
 }
 
+void test3D_1(){
+    UNIT_INIT();
+
+    enum{
+        r_size = 5,
+        d_size = 3,
+        x_size = 4
+    };
+    static const uint16_t rdx[r_size * d_size * x_size] = {
+        0x0001, 0x0002, 0x0003, 0x0004, 0x0005,
+        0x0002, 0x0003, 0x0004, 0x0005, 0x0006,
+        0x0003, 0x0004, 0x0005, 0x0006, 0x0032,
+
+        0x0001, 0x0002, 0x0003, 0x0004, 0x0005,
+        0x0002, 0x0003, 0x0004, 0x0005, 0x0055,
+        0x0003, 0x0004, 0x0005, 0x0006, 0x0055,
+
+        0x0001, 0x0002, 0x0003, 0x0004, 0x0005,
+        0x0002, 0x0003, 0x0004, 0x0025, 0x0111, // <--- peak
+        0x0003, 0x0024, 0x0035, 0x0066, 0x0110,
+
+        0x0001, 0x0002, 0x0003, 0x0004, 0x0005,
+        0x0002, 0x0003, 0x0004, 0x0005, 0x0006,
+        0x0003, 0x0004, 0x0005, 0x0006, 0x0040,
+    };
+
+    uint16_t numPeak = getPeak3D((int16_t*)rdx, r_size, d_size, x_size, outIndexRDX);
+    qDebug() << "number peaks: " << numPeak;
+    for (int i = 0; i < numPeak; ++i){
+        qDebug() << "peak: " << i
+                 << " r: " << FIELD(outIndexRDX[i], 32, 0xffff)
+                 << " d: " << FIELD(outIndexRDX[i], 16, 0xffff)
+                 << " x: " << FIELD(outIndexRDX[i], 0, 0xffff);
+    }
+    UNIT_ASSERT(numPeak == 1);
+    UNIT_ASSERT(FIELD(outIndexRDX[0], 32, 0xffff) && FIELD(outIndexRDX[0], 16, 0xffff) && FIELD(outIndexRDX[0], 0, 0xffff));
+    UNIT_RESULT();
+}
+
 void tests (){
     test_1();
     test_2();
@@ -166,6 +208,8 @@ void tests (){
 
     test_RealData_1();
     test_RealData_A();
+
+    test3D_1();
 
     UNIT_FINAL_RESULT();
 }

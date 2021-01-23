@@ -3,16 +3,14 @@
 
 enum {COEF_10dB = 10}; // = 10^1
 
-int16_t calcTreshold_C6000(int16_t * RD, int16_t r_size, int16_t d_size){
+int16_t calcTreshold_C6000(int16_t * RD, int32_t size){
     int64_t sumA = 0;
     int64_t sumB = 0;
-    for(int16_t d = 0; d < d_size/2; ++d){
-        for(int16_t r = 0; r < r_size; ++r){
-            sumA += RD[d*r_size + r];
-            sumB += RD[d*r_size + r + d_size*r_size/2];
-        }
+    for(int32_t i = 0; i < size/2; ++i){
+        sumA += RD[i];
+        sumB += RD[i + size/2];
     }
-    int16_t average = (sumA+sumB)/r_size/d_size;
+    int16_t average = (sumA+sumB)/size;
     int16_t treshold = average * COEF_10dB;
     return treshold;
 }
@@ -24,7 +22,7 @@ int16_t getPeak_C6000(int16_t * RD, int16_t r_size, int16_t d_size, uint32_t * o
         {1, -1},  {1, 0},  {1, 1}
     };
 
-    int16_t treshold = calcTreshold(RD, r_size, d_size);
+    int16_t treshold = calcTreshold_C6000(RD, r_size*d_size);
 
     int16_t numPeaks = 0;
     for(int16_t d = 0; d < d_size; ++d){
