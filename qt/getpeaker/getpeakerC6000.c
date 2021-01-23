@@ -1,0 +1,51 @@
+#include "getpeaker.h"
+#include "limits.h"
+
+enum {COEF_10dB = 10}; // = 10^1
+
+int16_t calcTreshold_C6000(int16_t * RD, int16_t r_size, int16_t d_size){
+    int64_t sumA = 0;
+    int64_t sumB = 0;
+    for(int16_t d = 0; d < d_size/2; ++d){
+        for(int16_t r = 0; r < r_size; ++r){
+            sumA += RD[d*r_size + r];
+            sumB += RD[d*r_size + r + d_size*r_size/2];
+        }
+    }
+    int16_t average = (sumA+sumB)/r_size/d_size;
+    int16_t treshold = average * COEF_10dB;
+    return treshold;
+}
+
+int16_t getPeak_C6000(int16_t * RD, int16_t r_size, int16_t d_size, uint32_t * outIndexRD){
+    static const int16_t offsetIndexes[8][2] = {
+        {-1, -1}, {-1, 0}, {-1, 1},
+        {0, -1},           {0, 1},
+        {1, -1},  {1, 0},  {1, 1}
+    };
+
+    int16_t treshold = calcTreshold(RD, r_size, d_size);
+
+    int16_t numPeaks = 0;
+    for(int16_t d = 0; d < d_size; ++d){
+        for(int16_t r = 0; r < r_size; ++r){
+            int16_t val = RD[d * r_size + r];
+            int16_t topCnt = 0;
+            if (val > treshold){
+                for(int16_t i = 0; i < 8; ++i){
+                    int16_t d_sh = d + offsetIndexes[i][0];
+                    int16_t r_sh = r + offsetIndexes[i][1];
+                    int16_t valAdjacent = ((r_sh < 0)||(d_sh < 0)||(r_sh >= r_size)||(d_sh >= d_size))
+                            ? SHRT_MIN : RD[d_sh * r_size + r_sh];
+                    topCnt += (val > valAdjacent);
+                }
+                if (topCnt == 8){
+                    outIndexRD[numPeaks] = r << 16 | d;
+                    ++numPeaks;
+                }
+            }
+        }
+    }
+
+    return numPeaks;
+}

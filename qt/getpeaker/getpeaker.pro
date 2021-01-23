@@ -19,6 +19,7 @@ SOURCES += \
     binreader.cpp \
     getCPUTime.c \
     getpeaker.c \
+    getpeakerC6000.c \
     main.cpp \
     mainwindow.cpp \
     tests.cpp
@@ -27,6 +28,7 @@ HEADERS += \
     binreader.h \
     getCPUTime.h \
     getpeaker.h \
+    getpeakerC6000.h \
     mainwindow.h
 
 FORMS += \
