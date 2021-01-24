@@ -5,6 +5,10 @@
 #include <QFileSystemModel>
 #include <QtCore/qmath.h>
 
+#include <iostream>
+
+using namespace std;
+
 BinReader::BinReader(QObject *parent) : QObject(parent)
 {
     QString path2 = QDir::currentPath() + "/surface.bin";
@@ -15,24 +19,24 @@ BinReader::BinReader(QObject *parent) : QObject(parent)
     if(file.open(QIODevice::ReadOnly))
     {
         QDataStream stream(&file);
-        qDebug() << file.size();
+        int32_t file_size = file.size();
+        qDebug() << "File size: " << file_size;
         enum{data_size = 32768};
         static char data[data_size];
         qDebug() << file.read((char*)data, data_size);
 
-        QString string;
+        uint16_t *data16 = (uint16_t*)data;
+        int16_t data16_size = file_size/2;
+
         char buffer [50];
-        for(int i = 0; i < data_size; i+=2){
-            int16_t level = qSqrt(data[i] + data[i+1]);
-            //snprintf (buffer, 50, "I%02d M%02d L%04d ", data[i], data[i+1], level);
-            snprintf (buffer, 50, "0x%04d, ", level);
-            string.append(buffer);
-            if ((i+1) % 32 == 31){
-                qDebug() << string;
-                string.clear();
+        for(int16_t i = 0; i < data16_size; ++i){
+            //snprintf (buffer, 50, "0x%04X, ", (int32_t)data16[i]);
+            snprintf (buffer, 50, "%d, ", (int32_t)data16[i]);
+            cout << buffer;
+            if (i % 512 == 511){
+                cout << endl;
             }
         }
-        qDebug() << string;
         file.close();
     }else{
         qDebug() << "Error open file";

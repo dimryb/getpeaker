@@ -2,6 +2,7 @@
 
 #include <QApplication>
 #include <QtDebug>
+#include "binreader.h"
 
 void tests ();
 
@@ -12,6 +13,8 @@ int main(int argc, char *argv[])
     //w.show();
 
     tests();
+
+    //BinReader binReader;
 
     return 0;// a.exec();
 }
