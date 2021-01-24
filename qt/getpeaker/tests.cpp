@@ -39,13 +39,13 @@ void _final_result(){
 #define FIELD(val, shift, mask) ((val >> shift)& mask)
 #define DEBUG_TESTS 0
 
-static const int16_t testData[] = {
-#include "test.data"
+enum{
+    r_size = 32,
+    d_size = 521
 };
 
-enum{
-    r_size = 128,
-    d_size = 256
+static const uint16_t testData[r_size*d_size] = {
+#include "test.data"
 };
 
 static uint32_t outIndexRD[1024];
@@ -77,11 +77,12 @@ void test_1(){
         0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000, 0x0000
     };
     // d_size = 5!
-    uint16_t numPeak = getPeak_C6000((int16_t*)rd, r_size, 5, outIndexRD);
+    uint16_t numPeak = getPeak((int16_t*)rd, r_size, 5, outIndexRD);
 #if DEBUG_TESTS
     cout << "number peaks: " << numPeak << endl;
 #endif
     UNIT_ASSERT(numPeak == 1);
+    UNIT_ASSERT((FIELD(outIndexRD[0], 16, 0xffff) == 1) && (FIELD(outIndexRD[0], 0, 0xffff) == 1));
     UNIT_RESULT();
 }
 
@@ -110,7 +111,7 @@ void test_2(){
         0x0001, 0x0002, 0x0005, 0x0002, 0x0001, 0x0002, 0x0001, 0x0008, 0x0010, 0x0000
     };
 
-    uint16_t numPeak = getPeak_C6000((int16_t*)rd, r_size, d_size, outIndexRD);
+    uint16_t numPeak = getPeak((int16_t*)rd, r_size, d_size, outIndexRD);
 #if DEBUG_TESTS
     cout << "number peaks: " << numPeak << endl;
     for (int i = 0; i < numPeak; ++i){
@@ -118,8 +119,8 @@ void test_2(){
     }
 #endif
     UNIT_ASSERT(numPeak == 2);
-    UNIT_ASSERT(((outIndexRD[0] >> 16) == 1) && ((outIndexRD[0] & 0xffff) == 1));
-    UNIT_ASSERT(((outIndexRD[1] >> 16) == 8) && ((outIndexRD[1] & 0xffff) == 8));
+    UNIT_ASSERT((FIELD(outIndexRD[0], 16, 0xffff) == 1) && (FIELD(outIndexRD[0], 0, 0xffff) == 1));
+    UNIT_ASSERT((FIELD(outIndexRD[1], 16, 0xffff) == 8) && (FIELD(outIndexRD[1], 0, 0xffff) == 8));
     UNIT_RESULT();
 }
 
@@ -141,7 +142,7 @@ void test_3(){
         0x0003, 0x0004, 0x0005, 0x0006, 0x0110,
     };
 
-    uint16_t numPeak = getPeak_C6000((int16_t*)rd, r_size, d_size, outIndexRD);
+    uint16_t numPeak = getPeak((int16_t*)rd, r_size, d_size, outIndexRD);
 #if DEBUG_TESTS
     cout << "number peaks: " << numPeak << endl;
     for (int i = 0; i < numPeak; ++i){
@@ -149,23 +150,47 @@ void test_3(){
     }
 #endif
     UNIT_ASSERT(numPeak == 1);
-    UNIT_ASSERT(((outIndexRD[0] >> 16) == 4) && ((outIndexRD[0] & 0xffff) == 2));
+    UNIT_ASSERT((FIELD(outIndexRD[0], 16, 0xFFFF) == 4) && (FIELD(outIndexRD[0], 0, 0xffff) == 2));
     UNIT_RESULT();
 }
 
 /**
- * @brief test_treshold
+ * @brief test_treshold_1
+ *
+ * Тест расчета порога
+ *
+ */
+void test_treshold_1(){
+    UNIT_INIT();
+    enum{
+        r_size = 5,
+        d_size = 2
+    };
+    static const uint16_t rd[r_size * d_size] = {
+        0x0004, 0x0002, 0x0004, 0x0002, 0x0004,
+        0x0002, 0x0004, 0x0002, 0x0004, 0x0002  // treshold == (4+2)*5/10 * 10dB == 30
+    };
+
+    uint16_t treshold = calcTreshold((uint16_t*)rd, r_size*d_size);
+#if DEBUG_TESTS
+    cout << "treshold: " << treshold << endl;
+#endif
+    UNIT_ASSERT(treshold == 30);
+    UNIT_RESULT();
+}
+
+
+/**
+ * @brief test_compare_treshold
  *
  * сравнение результатов расчета порога простой реализации и
  *  с адаптацией под ТМС серии C6000
  *
  */
-void test_treshold(){
-    // сравнение результатов расчета порога простой реализации и
-    // с адаптацией под ТМС серии C6000
+void test_compare_treshold(){
     UNIT_INIT();
-    uint16_t treshold_C6000 = calcTreshold_C6000((int16_t*)testData, r_size*d_size);
-    uint16_t treshold = calcTreshold((int16_t*)testData, r_size*d_size);
+    uint16_t treshold_C6000 = calcTreshold_C6000((uint16_t*)testData, r_size*d_size);
+    uint16_t treshold = calcTreshold((uint16_t*)testData, r_size*d_size);
 #if DEBUG_TESTS
     cout << "treshold_C6000: " << treshold_C6000 << endl;
     cout << "treshold: " << treshold << endl;
@@ -182,6 +207,10 @@ void test_treshold(){
  */
 void test_RealData_1(){
     UNIT_INIT();
+    enum{
+        r_size = 512,
+        d_size = 32
+    };
     uint16_t numPeak = getPeak((int16_t*)testData, r_size, d_size, outIndexRD);
 #if DEBUG_TESTS
     cout << "number peaks: " << numPeak << endl;
@@ -189,7 +218,10 @@ void test_RealData_1(){
         cout << "peak: " << i << " r: " << (outIndexRD[i] >> 16) << " d: " << (outIndexRD[i] & 0xffff) << endl;
     }
 #endif
-    UNIT_ASSERT(numPeak > 0);
+    UNIT_ASSERT(numPeak == 3);
+    UNIT_ASSERT((FIELD(outIndexRD[0], 16, 0xffff) == 156) && (FIELD(outIndexRD[0], 0, 0xffff) == 5));
+    UNIT_ASSERT((FIELD(outIndexRD[1], 16, 0xffff) == 404) && (FIELD(outIndexRD[1], 0, 0xffff) == 15));
+    UNIT_ASSERT((FIELD(outIndexRD[2], 16, 0xffff) == 118) && (FIELD(outIndexRD[2], 0, 0xffff) == 27));
     UNIT_RESULT();
 }
 
@@ -200,7 +232,7 @@ void test_RealData_1(){
  *  с адаптацией под ТМС серии C6000
  *
  */
-void test_RealData_A(){
+void test_compare_RealData(){
     UNIT_INIT();
     uint16_t numPeak_C6000 = getPeak_C6000((int16_t*)testData, r_size, d_size, outIndexRD);
     uint16_t numPeak = getPeak((int16_t*)testData, r_size, d_size, outIndexRD);
@@ -211,6 +243,7 @@ void test_RealData_A(){
     }
 #endif
     UNIT_ASSERT(numPeak_C6000 == numPeak);
+
     UNIT_RESULT();
 }
 
@@ -238,7 +271,7 @@ void test3D_1(){
         0x0003, 0x0004, 0x0005, 0x0006, 0x0055,
 
         0x0001, 0x0002, 0x0003, 0x0004, 0x0005,
-        0x0002, 0x0003, 0x0004, 0x0025, 0x0111, // <--- peak
+        0x0002, 0x0003, 0x0004, 0x0025, 0x0111, // <--- peak 4,1,2
         0x0003, 0x0024, 0x0035, 0x0066, 0x0110,
 
         0x0001, 0x0002, 0x0003, 0x0004, 0x0005,
@@ -246,7 +279,7 @@ void test3D_1(){
         0x0003, 0x0004, 0x0005, 0x0006, 0x0040,
     };
 
-    uint16_t numPeak = getPeak3D((int16_t*)rdx, r_size, d_size, x_size, outIndexRDX);
+    uint16_t numPeak = getPeak3D((uint16_t*)rdx, r_size, d_size, x_size, outIndexRDX);
 #if DEBUG_TESTS
     cout << "number peaks: " << numPeak << endl;
     for (int i = 0; i < numPeak; ++i){
@@ -258,23 +291,31 @@ void test3D_1(){
     }
 #endif
     UNIT_ASSERT(numPeak == 1);
-    UNIT_ASSERT(FIELD(outIndexRDX[0], 32, 0xffff) && FIELD(outIndexRDX[0], 16, 0xffff) && FIELD(outIndexRDX[0], 0, 0xffff));
+    UNIT_ASSERT((FIELD(outIndexRDX[0], 32, 0xffff) == 4)
+            && (FIELD(outIndexRDX[0], 16, 0xffff) == 1)
+            && (FIELD(outIndexRDX[0], 0, 0xffff) == 2));
     UNIT_RESULT();
 }
 
+/**
+ * @brief test3D_RealData_1
+ *
+ * Проверка работоспособности 3D на реальных данных
+ *
+ */
 void test3D_RealData_1(){
     UNIT_INIT();
 
     enum{
         r_size = 32,
         d_size = 32,
-        x_size = 32
+        x_size = 16
     };
 
     UNIT_ASSERT(r_size*d_size*x_size <= sizeof(testData));
 
-    uint16_t numPeak = getPeak3D((int16_t*)testData, r_size, d_size, x_size, outIndexRDX);
-#if 0 // DEBUG_TESTS
+    uint16_t numPeak = getPeak3D((uint16_t*)testData, r_size, d_size, x_size, outIndexRDX);
+#if DEBUG_TESTS
     cout << "number peaks: " << numPeak << endl;
     for (int i = 0; i < numPeak; ++i){
         cout << "peak: " << i
@@ -285,6 +326,7 @@ void test3D_RealData_1(){
     }
 #endif
     UNIT_ASSERT(numPeak > 0);
+
     UNIT_RESULT();
 }
 
@@ -293,13 +335,15 @@ void tests (){
     test_2();
     test_3();
 
-    test_treshold();
-
     test_RealData_1();
-    test_RealData_A();
+
+    test_treshold_1();
 
     test3D_1();
     test3D_RealData_1();
+
+    test_compare_treshold();
+    test_compare_RealData();
 
     UNIT_FINAL_RESULT();
 }
